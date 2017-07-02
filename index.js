@@ -46,7 +46,7 @@ class ScreenshotQueue extends events_1.EventEmitter {
         return __awaiter(this, void 0, void 0, function* () {
             const queueItem = this.queue.shift();
             if (queueItem) {
-                console.log(yield worker.takeScreenshot(this.baseFolder, queueItem));
+                console.log(yield worker.takeScreenshotsForUrl(this.baseFolder, queueItem));
                 this.processQueueItem(worker);
             }
             else {
@@ -73,14 +73,23 @@ class ScreenshotWorker extends events_1.EventEmitter {
             this.frameManager = FrameManager(this.win);
         }
     }
-    takeScreenshot(baseFolder, ssConfig) {
+    takeScreenshotsForUrl(baseFolder, ssConfig) {
         return __awaiter(this, void 0, void 0, function* () {
             if (!this.win) {
                 return;
             }
-            this.win.setSize(ssConfig.width, 200, false);
             yield this.loadURL(ssConfig.url);
-            this.win.setSize(ssConfig.width, yield this.getContentHeight(), false);
+            const screenshots = [];
+            for (var i = 0; i < ssConfig.variations.length; i++) {
+                const screenshot = yield this.takeScreenshot(baseFolder, ssConfig.variations[i]);
+                screenshots.push(screenshot);
+            }
+        });
+    }
+    takeScreenshot(baseFolder, variationConfig) {
+        return __awaiter(this, void 0, void 0, function* () {
+            this.win.setSize(variationConfig.width, 200, false);
+            this.win.setSize(variationConfig.width, yield this.getContentHeight(), false);
             const filename = path.join(baseFolder, `${uuidv4()}.webp`);
             yield this.capturePage(filename);
             return filename;
@@ -99,7 +108,7 @@ class ScreenshotWorker extends events_1.EventEmitter {
             }
             this.frameManager.requestFrame(() => {
                 this.win.webContents.capturePage((image) => {
-                    sharp(image.toPNG()).webp({ lossles: true }).toFile(filename);
+                    sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
                     resolve(filename);
                 });
             });
