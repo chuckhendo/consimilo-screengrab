@@ -14,7 +14,7 @@ if (!process.versions.electron) {
 const electron_1 = require("electron");
 const path = require("path");
 const events_1 = require("events");
-const uuidv4 = require("uuid/v4");
+const uuid = require("uuid");
 const sharp = require("sharp");
 const FrameManager = require("./frame-manager");
 class ScreenshotQueue extends events_1.EventEmitter {
@@ -79,9 +79,8 @@ class ScreenshotWorker extends events_1.EventEmitter {
     }
     takeScreenshotsForUrl(baseFolder, ssConfig) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (!this.win) {
+            if (!this.win)
                 return;
-            }
             yield this.loadURL(ssConfig.url);
             for (var i = 0; i < ssConfig.variations.length; i++) {
                 const screenshot = yield this.takeScreenshot(baseFolder, ssConfig.variations[i]);
@@ -91,9 +90,11 @@ class ScreenshotWorker extends events_1.EventEmitter {
     }
     takeScreenshot(baseFolder, variationConfig) {
         return __awaiter(this, void 0, void 0, function* () {
+            if (!this.win)
+                return;
             this.win.setSize(variationConfig.width, 200, false);
             this.win.setSize(variationConfig.width, yield this.getContentHeight(), false);
-            const filename = path.join(baseFolder, `${uuidv4()}.webp`);
+            const filename = path.join(baseFolder, `${uuid.v4()}.webp`);
             yield this.capturePage(filename);
             return filename;
         });
@@ -106,10 +107,11 @@ class ScreenshotWorker extends events_1.EventEmitter {
     }
     capturePage(filename) {
         return new Promise((resolve, reject) => {
-            if (!this.win) {
+            if (!this.win)
                 return reject();
-            }
             this.frameManager.requestFrame(() => {
+                if (!this.win)
+                    return reject();
                 this.win.webContents.capturePage((image) => __awaiter(this, void 0, void 0, function* () {
                     yield sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
                     resolve(filename);
@@ -131,11 +133,9 @@ class ScreenshotWorker extends events_1.EventEmitter {
         });
     }
     runJS(js) {
-        return new Promise((resolve, reject) => {
-            this.win.webContents.executeJavaScript(js, (result) => {
-                resolve(result);
-            });
-        });
+        if (!this.win)
+            return;
+        return this.win.webContents.executeJavaScript(js);
     }
     getContentHeight() {
         return this.runJS("document.documentElement.scrollHeight");

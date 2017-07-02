@@ -2,7 +2,7 @@
   "name": "huger",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "dist/index.js",
   "scripts": {
     "start": "tsc -w",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -12,6 +12,7 @@
   "dependencies": {
     "@types/electron": "^1.6.10",
     "@types/node": "^8.0.7",
+    "@types/uuid": "^3.0.0",
     "sharp": "^0.18.2",
     "typescript": "^2.4.1",
     "uuid": "^3.1.0"

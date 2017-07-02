@@ -6,7 +6,7 @@ import {remote} from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import {EventEmitter} from "events";
-import * as uuidv4 from "uuid/v4";
+import * as uuid from "uuid";
 import * as sharp from "sharp";
 
 import * as FrameManager from "./frame-manager";
@@ -78,6 +78,7 @@ export class ScreenshotQueue extends EventEmitter {
 
 class ScreenshotWorker extends EventEmitter {
     private win: Electron.BrowserWindow | undefined;
+    private frameManager: any;
     
     constructor() {
         super();
@@ -99,9 +100,7 @@ class ScreenshotWorker extends EventEmitter {
     }
 
     public async takeScreenshotsForUrl(baseFolder: string, ssConfig: IScreenshotConfig) {
-        if(!this.win) {
-            return;
-        }
+        if(!this.win) return;
 
         await this.loadURL(ssConfig.url);
         for(var i = 0; i < ssConfig.variations.length; i++) {
@@ -111,9 +110,11 @@ class ScreenshotWorker extends EventEmitter {
     }
 
     private async takeScreenshot(baseFolder: string, variationConfig: IScreenshotConfigVariation) {
+        if(!this.win) return;
+
         this.win.setSize(variationConfig.width, 200, false);
         this.win.setSize(variationConfig.width, await this.getContentHeight(), false);
-        const filename = path.join(baseFolder, `${uuidv4()}.webp`);
+        const filename = path.join(baseFolder, `${uuid.v4()}.webp`);
         await this.capturePage(filename);
         return filename;
     }
@@ -127,10 +128,10 @@ class ScreenshotWorker extends EventEmitter {
 
     private capturePage(filename: string) {
         return new Promise((resolve, reject) => {
-            if(!this.win) {
-                return reject();
-            }
+            if(!this.win) return reject();
+            
             this.frameManager.requestFrame(() => {
+                if(!this.win) return reject();
                 this.win.webContents.capturePage(async (image) => { 
                     await sharp(image.toPNG()).webp({lossless: true}).toFile(filename);
                     resolve(filename);
@@ -155,11 +156,8 @@ class ScreenshotWorker extends EventEmitter {
     }
 
     private runJS(js: string) {
-        return new Promise((resolve, reject) => {
-            this.win.webContents.executeJavaScript(js, (result) => {
-                resolve(result);
-            });
-        });
+        if(!this.win) return;
+        return this.win.webContents.executeJavaScript(js);
     }
 
     private getContentHeight(): Promise<number> {
