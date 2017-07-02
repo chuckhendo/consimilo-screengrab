@@ -39,7 +39,12 @@ export class ScreenshotQueue extends EventEmitter {
         this.baseFolder = baseFolder;
 
         for(let i = 0; i < this.threads; i++) {
-            this.workers.push(new ScreenshotWorker());
+            const worker = new ScreenshotWorker()
+            this.workers.push(worker);
+
+            worker.on("screenshot_taken", (screenshot) => {
+                this.emit("screenshot_taken", screenshot);
+            });
         }
     }
 
@@ -63,7 +68,7 @@ export class ScreenshotQueue extends EventEmitter {
         const queueItem = this.queue.shift();
 
         if(queueItem) {
-            console.log(await worker.takeScreenshotsForUrl(this.baseFolder, queueItem));
+            await worker.takeScreenshotsForUrl(this.baseFolder, queueItem);
             this.processQueueItem(worker);
         } else {
             worker.stop();
@@ -99,11 +104,10 @@ class ScreenshotWorker extends EventEmitter {
         }
 
         await this.loadURL(ssConfig.url);
-        const screenshots = [];
         for(var i = 0; i < ssConfig.variations.length; i++) {
             const screenshot = await this.takeScreenshot(baseFolder, ssConfig.variations[i]);
-            screenshots.push(screenshot);
-        }
+            this.emit("screenshot_taken", screenshot);            
+        }        
     }
 
     private async takeScreenshot(baseFolder: string, variationConfig: IScreenshotConfigVariation) {
@@ -127,8 +131,8 @@ class ScreenshotWorker extends EventEmitter {
                 return reject();
             }
             this.frameManager.requestFrame(() => {
-                this.win.webContents.capturePage((image) => { 
-                    sharp(image.toPNG()).webp({lossless: true}).toFile(filename);
+                this.win.webContents.capturePage(async (image) => { 
+                    await sharp(image.toPNG()).webp({lossless: true}).toFile(filename);
                     resolve(filename);
                 });
             });

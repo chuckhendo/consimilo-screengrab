@@ -26,7 +26,11 @@ class ScreenshotQueue extends events_1.EventEmitter {
         this.threads = threads || 1;
         this.baseFolder = baseFolder;
         for (let i = 0; i < this.threads; i++) {
-            this.workers.push(new ScreenshotWorker());
+            const worker = new ScreenshotWorker();
+            this.workers.push(worker);
+            worker.on("screenshot_taken", (screenshot) => {
+                this.emit("screenshot_taken", screenshot);
+            });
         }
     }
     add(ssConfig) {
@@ -46,7 +50,7 @@ class ScreenshotQueue extends events_1.EventEmitter {
         return __awaiter(this, void 0, void 0, function* () {
             const queueItem = this.queue.shift();
             if (queueItem) {
-                console.log(yield worker.takeScreenshotsForUrl(this.baseFolder, queueItem));
+                yield worker.takeScreenshotsForUrl(this.baseFolder, queueItem);
                 this.processQueueItem(worker);
             }
             else {
@@ -79,10 +83,9 @@ class ScreenshotWorker extends events_1.EventEmitter {
                 return;
             }
             yield this.loadURL(ssConfig.url);
-            const screenshots = [];
             for (var i = 0; i < ssConfig.variations.length; i++) {
                 const screenshot = yield this.takeScreenshot(baseFolder, ssConfig.variations[i]);
-                screenshots.push(screenshot);
+                this.emit("screenshot_taken", screenshot);
             }
         });
     }
@@ -107,10 +110,10 @@ class ScreenshotWorker extends events_1.EventEmitter {
                 return reject();
             }
             this.frameManager.requestFrame(() => {
-                this.win.webContents.capturePage((image) => {
-                    sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
+                this.win.webContents.capturePage((image) => __awaiter(this, void 0, void 0, function* () {
+                    yield sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
                     resolve(filename);
-                });
+                }));
             });
         });
     }
