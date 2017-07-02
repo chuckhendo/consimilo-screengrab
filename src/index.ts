@@ -16,14 +16,19 @@ interface IScreenshotQueueOptions {
     baseFolder: string    
 }
 
-interface IScreenshotConfig {
+interface ISharedConfig {
+    width?: number,
+    element?: string,
+    hideElements?: string[]
+}
+
+interface IScreenshotConfig extends ISharedConfig {
     url: string,
     variations: IScreenshotConfigVariation[]
 }
 
-interface IScreenshotConfigVariation {
-    width: number,
-    element?: string
+interface IScreenshotConfigVariation extends ISharedConfig {
+
 }
 
 export class ScreenshotQueue extends EventEmitter {
@@ -121,25 +126,49 @@ class ScreenshotWorker extends EventEmitter {
 
     public async takeScreenshotsForUrl(baseFolder: string, ssConfig: IScreenshotConfig) {
         if(!this.win) return;
-
         await this.loadURL(ssConfig.url);
+        this.runJS(`
+            function getElementRect(element) {
+                const rect = document.querySelector(element).getBoundingClientRect();
+                return JSON.stringify({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+            }
+
+            function insertCSS(css) {
+                const prevStyleEl = document.querySelectorAll("[data-tag-source='huger']");
+                if(prevStyleEl.length > 0) {
+                    prevStyleEl.forEach((styleEl) => {
+                        styleEl.parentNode.removeChild(styleEl);
+                    });
+                }
+                const styleEl = document.createElement("style");
+                styleEl.setAttribute("data-tag-source", "huger");
+                styleEl.innerText = css;
+                document.head.appendChild(styleEl);
+            }
+        `);
         for(var i = 0; i < ssConfig.variations.length; i++) {
             if(!this.win) return;
-            const screenshot = await this.takeScreenshot(baseFolder, ssConfig.variations[i]);
+            const screenshot = await this.takeScreenshot(baseFolder, { ...ssConfig, ...ssConfig.variations[i] });
             this.emit("screenshot_taken", screenshot);            
         }        
     }
 
-    private async takeScreenshot(baseFolder: string, variationConfig: IScreenshotConfigVariation) {
+    private async takeScreenshot(baseFolder: string, {width, element, hideElements}: IScreenshotConfig) {
         if(!this.win) return;
-
-        this.win.setSize(variationConfig.width, 200, false);
-        this.win.setSize(variationConfig.width, await this.getContentHeight(), false);
+        if(width) {
+            this.win.setSize(width, 200, false);
+            this.win.setSize(width, await this.getContentHeight(), false);
+        }
         const filename = path.join(baseFolder, `${uuid.v4()}.webp`);
 
+        if(hideElements) {
+            const styles = hideElements.length > 0 ? `${hideElements.join(", ")} { display: none; }` : "";
+            this.runJS(`insertCSS("${styles}")`);
+        }
+
         // code for element only screenshots
-        if(variationConfig.element) {
-            const elementRect = await this.getElementRect(variationConfig.element);
+        if(element) {
+            const elementRect = await this.getElementRect(element);
             await this.capturePage(filename, elementRect);
         } else {
             await this.capturePage(filename);
@@ -195,10 +224,7 @@ class ScreenshotWorker extends EventEmitter {
     }
 
     private async getElementRect(element: string): Promise<Electron.Rectangle> {
-        const rectString: string = await this.runJS(`
-            const rect = document.querySelector("${element}").getBoundingClientRect();
-            JSON.stringify({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
-        `);
+        const rectString: string = await this.runJS(`getElementRect("${element}");`);
 
         return JSON.parse(rectString) as Electron.Rectangle;
     }

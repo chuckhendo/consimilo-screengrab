@@ -98,24 +98,49 @@ class ScreenshotWorker extends events_1.EventEmitter {
             if (!this.win)
                 return;
             yield this.loadURL(ssConfig.url);
+            this.runJS(`
+            function getElementRect(element) {
+                const rect = document.querySelector(element).getBoundingClientRect();
+                return JSON.stringify({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+            }
+
+            function insertCSS(css) {
+                const prevStyleEl = document.querySelectorAll("[data-tag-source='huger']");
+                if(prevStyleEl.length > 0) {
+                    prevStyleEl.forEach((styleEl) => {
+                        styleEl.parentNode.removeChild(styleEl);
+                    });
+                }
+                const styleEl = document.createElement("style");
+                styleEl.setAttribute("data-tag-source", "huger");
+                styleEl.innerText = css;
+                document.head.appendChild(styleEl);
+            }
+        `);
             for (var i = 0; i < ssConfig.variations.length; i++) {
                 if (!this.win)
                     return;
-                const screenshot = yield this.takeScreenshot(baseFolder, ssConfig.variations[i]);
+                const screenshot = yield this.takeScreenshot(baseFolder, Object.assign({}, ssConfig, ssConfig.variations[i]));
                 this.emit("screenshot_taken", screenshot);
             }
         });
     }
-    takeScreenshot(baseFolder, variationConfig) {
+    takeScreenshot(baseFolder, { width, element, hideElements }) {
         return __awaiter(this, void 0, void 0, function* () {
             if (!this.win)
                 return;
-            this.win.setSize(variationConfig.width, 200, false);
-            this.win.setSize(variationConfig.width, yield this.getContentHeight(), false);
+            if (width) {
+                this.win.setSize(width, 200, false);
+                this.win.setSize(width, yield this.getContentHeight(), false);
+            }
             const filename = path.join(baseFolder, `${uuid.v4()}.webp`);
+            if (hideElements) {
+                const styles = hideElements.length > 0 ? `${hideElements.join(", ")} { display: none; }` : "";
+                this.runJS(`insertCSS("${styles}")`);
+            }
             // code for element only screenshots
-            if (variationConfig.element) {
-                const elementRect = yield this.getElementRect(variationConfig.element);
+            if (element) {
+                const elementRect = yield this.getElementRect(element);
                 yield this.capturePage(filename, elementRect);
             }
             else {
@@ -169,10 +194,7 @@ class ScreenshotWorker extends events_1.EventEmitter {
     }
     getElementRect(element) {
         return __awaiter(this, void 0, void 0, function* () {
-            const rectString = yield this.runJS(`
-            const rect = document.querySelector("${element}").getBoundingClientRect();
-            JSON.stringify({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
-        `);
+            const rectString = yield this.runJS(`getElementRect("${element}");`);
             return JSON.parse(rectString);
         });
     }
