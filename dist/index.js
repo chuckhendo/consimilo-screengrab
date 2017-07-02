@@ -76,6 +76,7 @@ class ScreenshotWorker extends events_1.EventEmitter {
             this.win = new electron_1.remote.BrowserWindow({
                 show: false,
                 width: 1200,
+                frame: false,
                 webPreferences: {
                     nodeIntegration: false,
                     offscreen: true
@@ -149,6 +150,6 @@ class ScreenshotWorker extends events_1.EventEmitter {
         return this.win.webContents.executeJavaScript(js);
     }
     getContentHeight() {
-        return this.runJS("document.documentElement.scrollHeight");
+        return this.runJS("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)");
     }
 }

@@ -98,6 +98,7 @@ class ScreenshotWorker extends EventEmitter {
             this.win = new remote.BrowserWindow({
                 show: false,
                 width: 1200,
+                frame: false,
                 webPreferences: {
                     nodeIntegration: false,
                     offscreen: true
@@ -173,6 +174,6 @@ class ScreenshotWorker extends EventEmitter {
     }
 
     private getContentHeight(): Promise<number> {
-        return this.runJS("document.documentElement.scrollHeight") as Promise<number>;
+        return this.runJS("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)") as Promise<number>;
     }
 }
