@@ -113,21 +113,36 @@ class ScreenshotWorker extends events_1.EventEmitter {
             this.win.setSize(variationConfig.width, 200, false);
             this.win.setSize(variationConfig.width, yield this.getContentHeight(), false);
             const filename = path.join(baseFolder, `${uuid.v4()}.webp`);
-            yield this.capturePage(filename);
+            // code for element only screenshots
+            if (variationConfig.element) {
+                const elementRect = yield this.getElementRect(variationConfig.element);
+                yield this.capturePage(filename, elementRect);
+            }
+            else {
+                yield this.capturePage(filename);
+            }
             return filename;
         });
     }
-    capturePage(filename) {
+    capturePage(filename, rect) {
         return new Promise((resolve, reject) => {
             if (!this.win)
                 return reject();
             this.frameManager.requestFrame(() => {
                 if (!this.win)
                     return reject();
-                this.win.webContents.capturePage((image) => __awaiter(this, void 0, void 0, function* () {
-                    yield sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
-                    resolve(filename);
-                }));
+                if (rect) {
+                    this.win.webContents.capturePage(rect, (image) => __awaiter(this, void 0, void 0, function* () {
+                        yield sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
+                        resolve(filename);
+                    }));
+                }
+                else {
+                    this.win.webContents.capturePage((image) => __awaiter(this, void 0, void 0, function* () {
+                        yield sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
+                        resolve(filename);
+                    }));
+                }
             }, 3000);
         });
     }
@@ -151,5 +166,14 @@ class ScreenshotWorker extends events_1.EventEmitter {
     }
     getContentHeight() {
         return this.runJS("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)");
+    }
+    getElementRect(element) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const rectString = yield this.runJS(`
+            const rect = document.querySelector("${element}").getBoundingClientRect();
+            JSON.stringify({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+        `);
+            return JSON.parse(rectString);
+        });
     }
 }

@@ -22,7 +22,8 @@ interface IScreenshotConfig {
 }
 
 interface IScreenshotConfigVariation {
-    width: number
+    width: number,
+    element?: string
 }
 
 export class ScreenshotQueue extends EventEmitter {
@@ -135,20 +136,36 @@ class ScreenshotWorker extends EventEmitter {
         this.win.setSize(variationConfig.width, 200, false);
         this.win.setSize(variationConfig.width, await this.getContentHeight(), false);
         const filename = path.join(baseFolder, `${uuid.v4()}.webp`);
-        await this.capturePage(filename);
+
+        // code for element only screenshots
+        if(variationConfig.element) {
+            const elementRect = await this.getElementRect(variationConfig.element);
+            await this.capturePage(filename, elementRect);
+        } else {
+            await this.capturePage(filename);
+        }
+
         return filename;
     }
 
-    private capturePage(filename: string) {
+    private capturePage(filename: string, rect?: Electron.Rectangle) {
         return new Promise((resolve, reject) => {
             if(!this.win) return reject();
             
             this.frameManager.requestFrame(() => {
                 if(!this.win) return reject();
-                this.win.webContents.capturePage(async (image) => { 
-                    await sharp(image.toPNG()).webp({lossless: true}).toFile(filename);
-                    resolve(filename);
-                });
+
+                if(rect) {
+                    this.win.webContents.capturePage(rect, async (image) => { 
+                        await sharp(image.toPNG()).webp({lossless: true}).toFile(filename);
+                        resolve(filename);
+                    });
+                } else {
+                    this.win.webContents.capturePage(async (image) => { 
+                        await sharp(image.toPNG()).webp({lossless: true}).toFile(filename);
+                        resolve(filename);
+                    });
+                }
             }, 3000);
         });
     }
@@ -175,5 +192,14 @@ class ScreenshotWorker extends EventEmitter {
 
     private getContentHeight(): Promise<number> {
         return this.runJS("Math.max(document.documentElement.scrollHeight, document.body.scrollHeight)") as Promise<number>;
+    }
+
+    private async getElementRect(element: string): Promise<Electron.Rectangle> {
+        const rectString: string = await this.runJS(`
+            const rect = document.querySelector("${element}").getBoundingClientRect();
+            JSON.stringify({ x: rect.left, y: rect.top, width: rect.width, height: rect.height });
+        `);
+
+        return JSON.parse(rectString) as Electron.Rectangle;
     }
 }
