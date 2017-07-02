@@ -42,9 +42,12 @@ class ScreenshotQueue extends events_1.EventEmitter {
             worker.start();
             this.processQueueItem(worker);
         });
+        this.emit("started");
     }
     stop() {
         this.running = false;
+        this.workers.forEach((worker) => worker.stop());
+        this.emit("finished");
     }
     processQueueItem(worker) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -55,6 +58,9 @@ class ScreenshotQueue extends events_1.EventEmitter {
             }
             else {
                 worker.stop();
+                if (this.workers.filter((worker) => worker.running).length === 0) {
+                    this.stop();
+                }
             }
         });
     }
@@ -63,6 +69,7 @@ exports.ScreenshotQueue = ScreenshotQueue;
 class ScreenshotWorker extends events_1.EventEmitter {
     constructor() {
         super();
+        this.running = false;
     }
     start() {
         if (!this.win) {
@@ -75,6 +82,14 @@ class ScreenshotWorker extends events_1.EventEmitter {
                 }
             });
             this.frameManager = FrameManager(this.win);
+            this.running = true;
+        }
+    }
+    stop() {
+        if (this.win) {
+            this.win.close();
+            this.win = undefined;
+            this.running = false;
         }
     }
     takeScreenshotsForUrl(baseFolder, ssConfig) {
@@ -83,6 +98,8 @@ class ScreenshotWorker extends events_1.EventEmitter {
                 return;
             yield this.loadURL(ssConfig.url);
             for (var i = 0; i < ssConfig.variations.length; i++) {
+                if (!this.win)
+                    return;
                 const screenshot = yield this.takeScreenshot(baseFolder, ssConfig.variations[i]);
                 this.emit("screenshot_taken", screenshot);
             }
@@ -99,12 +116,6 @@ class ScreenshotWorker extends events_1.EventEmitter {
             return filename;
         });
     }
-    stop() {
-        if (this.win) {
-            this.win.close();
-            this.win = undefined;
-        }
-    }
     capturePage(filename) {
         return new Promise((resolve, reject) => {
             if (!this.win)
@@ -116,7 +127,7 @@ class ScreenshotWorker extends events_1.EventEmitter {
                     yield sharp(image.toPNG()).webp({ lossless: true }).toFile(filename);
                     resolve(filename);
                 }));
-            });
+            }, 3000);
         });
     }
     loadURL(url) {

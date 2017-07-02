@@ -58,10 +58,15 @@ export class ScreenshotQueue extends EventEmitter {
             worker.start();
             this.processQueueItem(worker);
         });
+
+        this.emit("started");
     }
 
     public stop() {
         this.running = false;
+        this.workers.forEach((worker) => worker.stop());
+
+        this.emit("finished");
     }
 
     private async processQueueItem(worker: ScreenshotWorker) {
@@ -72,11 +77,15 @@ export class ScreenshotQueue extends EventEmitter {
             this.processQueueItem(worker);
         } else {
             worker.stop();
+            if(this.workers.filter((worker) => worker.running).length === 0) {
+                this.stop();
+            }
         }
     }
 }
 
 class ScreenshotWorker extends EventEmitter {
+    public running = false;
     private win: Electron.BrowserWindow | undefined;
     private frameManager: any;
     
@@ -96,6 +105,15 @@ class ScreenshotWorker extends EventEmitter {
             });
 
             this.frameManager = FrameManager(this.win);
+            this.running = true;
+        }
+    }
+
+    public stop() {
+        if(this.win) {
+            this.win.close();
+            this.win = undefined;
+            this.running = false;
         }
     }
 
@@ -104,6 +122,7 @@ class ScreenshotWorker extends EventEmitter {
 
         await this.loadURL(ssConfig.url);
         for(var i = 0; i < ssConfig.variations.length; i++) {
+            if(!this.win) return;
             const screenshot = await this.takeScreenshot(baseFolder, ssConfig.variations[i]);
             this.emit("screenshot_taken", screenshot);            
         }        
@@ -118,13 +137,6 @@ class ScreenshotWorker extends EventEmitter {
         await this.capturePage(filename);
         return filename;
     }
-    
-    public stop() {
-        if(this.win) {
-            this.win.close();
-            this.win = undefined;
-        }
-    }
 
     private capturePage(filename: string) {
         return new Promise((resolve, reject) => {
@@ -136,7 +148,7 @@ class ScreenshotWorker extends EventEmitter {
                     await sharp(image.toPNG()).webp({lossless: true}).toFile(filename);
                     resolve(filename);
                 });
-            });
+            }, 3000);
         });
     }
 
