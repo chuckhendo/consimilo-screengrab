@@ -116,6 +116,12 @@ class ScreenshotWorker extends events_1.EventEmitter {
                 styleEl.innerText = css;
                 document.head.appendChild(styleEl);
             }
+
+            function replaceContent(element, text) {
+                Array.from(document.querySelectorAll(element)).forEach((el) => {
+                    el.innerText = text;
+                });
+            }
         `);
             for (var i = 0; i < ssConfig.variations.length; i++) {
                 if (!this.win)
@@ -125,7 +131,7 @@ class ScreenshotWorker extends events_1.EventEmitter {
             }
         });
     }
-    takeScreenshot(baseFolder, { width, element, hideElements }) {
+    takeScreenshot(baseFolder, { width, element, hideElements, replaceContent }) {
         return __awaiter(this, void 0, void 0, function* () {
             if (!this.win)
                 return;
@@ -137,6 +143,11 @@ class ScreenshotWorker extends events_1.EventEmitter {
             if (hideElements) {
                 const styles = hideElements.length > 0 ? `${hideElements.join(", ")} { display: none; }` : "";
                 this.runJS(`insertCSS("${styles}")`);
+            }
+            if (replaceContent) {
+                replaceContent.forEach((item) => {
+                    this.runJS(`replaceContent("${item.selector}", "${item.text}");`);
+                });
             }
             // code for element only screenshots
             if (element) {

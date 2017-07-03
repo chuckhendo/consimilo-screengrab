@@ -19,7 +19,8 @@ interface IScreenshotQueueOptions {
 interface ISharedConfig {
     width?: number,
     element?: string,
-    hideElements?: string[]
+    hideElements?: string[],
+    replaceContent?: IReplaceContent[]
 }
 
 interface IScreenshotConfig extends ISharedConfig {
@@ -29,6 +30,11 @@ interface IScreenshotConfig extends ISharedConfig {
 
 interface IScreenshotConfigVariation extends ISharedConfig {
 
+}
+
+interface IReplaceContent {
+    selector: string,
+    text?: string
 }
 
 export class ScreenshotQueue extends EventEmitter {
@@ -145,6 +151,12 @@ class ScreenshotWorker extends EventEmitter {
                 styleEl.innerText = css;
                 document.head.appendChild(styleEl);
             }
+
+            function replaceContent(element, text) {
+                Array.from(document.querySelectorAll(element)).forEach((el) => {
+                    el.innerText = text;
+                });
+            }
         `);
         for(var i = 0; i < ssConfig.variations.length; i++) {
             if(!this.win) return;
@@ -153,7 +165,7 @@ class ScreenshotWorker extends EventEmitter {
         }        
     }
 
-    private async takeScreenshot(baseFolder: string, {width, element, hideElements}: IScreenshotConfig) {
+    private async takeScreenshot(baseFolder: string, {width, element, hideElements, replaceContent}: IScreenshotConfig) {
         if(!this.win) return;
         if(width) {
             this.win.setSize(width, 200, false);
@@ -164,6 +176,12 @@ class ScreenshotWorker extends EventEmitter {
         if(hideElements) {
             const styles = hideElements.length > 0 ? `${hideElements.join(", ")} { display: none; }` : "";
             this.runJS(`insertCSS("${styles}")`);
+        }
+
+        if(replaceContent) {
+            replaceContent.forEach((item) => {
+                this.runJS(`replaceContent("${item.selector}", "${item.text}");`);
+            });
         }
 
         // code for element only screenshots
